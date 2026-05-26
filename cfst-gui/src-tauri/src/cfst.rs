@@ -209,18 +209,20 @@ pub async fn run_cfst(
     let handle = running.clone();
     let app_handle_clone = app_handle.clone();
 
-    // Read stdout in background, handling \r for progress bars
-    // cfst.exe uses \r to update progress in-place in terminals; in a pipe
-    // these are just bytes, so we debounce: capture the latest \r-delimited
-    // segment and emit it periodically, while \n-delimited lines go to log.
+    // Read stdout in background.
+    // cfst.exe outputs progress lines that update in-place via \r in terminals,
+    // but when stdout is piped the line-endings may be \r, \n, or \r\n.
+    // Strategy: treat both \r and \n as line separators. Classify each line
+    // by content — progress lines (contain " / " and "可用") go to the
+    // debounced progress bar, everything else goes to the log.
     let latest_progress = Arc::new(Mutex::new(String::new()));
     let progress_for_timer = latest_progress.clone();
     let timer_app = app_handle.clone();
 
-    // Timer task: emit latest progress every 100ms
+    // Timer task: emit latest progress every 150ms
     let progress_timer = tokio::spawn(async move {
         loop {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
             let text = progress_for_timer.lock().unwrap().clone();
             if !text.is_empty() {
                 let _ = timer_app.emit("cfst:event", crate::models::RunEvent {
@@ -239,19 +241,21 @@ pub async fn run_cfst(
                 Ok(0) => break,
                 Ok(n) => {
                     for &byte in &buf[..n] {
-                        if byte == b'\r' {
+                        if byte == b'\r' || byte == b'\n' {
                             if !line_buf.is_empty() {
                                 let text = String::from_utf8_lossy(&line_buf).to_string();
-                                *latest_progress.lock().unwrap() = text;
-                                line_buf.clear();
-                            }
-                        } else if byte == b'\n' {
-                            if !line_buf.is_empty() {
-                                let text = String::from_utf8_lossy(&line_buf).to_string();
-                                let _ = app_handle_clone.emit("cfst:event", crate::models::RunEvent {
-                                    event_type: "log".into(),
-                                    message: text + "\n",
-                                });
+                                let trimmed = text.trim().to_string();
+                                if !trimmed.is_empty() {
+                                    // Progress lines look like "0 / 5955 [___] 可用: 0"
+                                    if trimmed.contains(" / ") && trimmed.contains("可用") {
+                                        *latest_progress.lock().unwrap() = trimmed;
+                                    } else {
+                                        let _ = app_handle_clone.emit("cfst:event", crate::models::RunEvent {
+                                            event_type: "log".into(),
+                                            message: trimmed + "\n",
+                                        });
+                                    }
+                                }
                                 line_buf.clear();
                             }
                         } else {
@@ -262,11 +266,20 @@ pub async fn run_cfst(
                 Err(_) => break,
             }
         }
-        // Emit any final progress
-        let remaining = line_buf;
-        if !remaining.is_empty() {
-            let text = String::from_utf8_lossy(&remaining).to_string();
-            *latest_progress.lock().unwrap() = text;
+        // Emit any remaining text
+        if !line_buf.is_empty() {
+            let text = String::from_utf8_lossy(&line_buf).to_string();
+            let trimmed = text.trim().to_string();
+            if !trimmed.is_empty() {
+                if trimmed.contains(" / ") && trimmed.contains("可用") {
+                    *latest_progress.lock().unwrap() = trimmed;
+                } else {
+                    let _ = app_handle_clone.emit("cfst:event", crate::models::RunEvent {
+                        event_type: "log".into(),
+                        message: trimmed + "\n",
+                    });
+                }
+            }
         }
     });
 
