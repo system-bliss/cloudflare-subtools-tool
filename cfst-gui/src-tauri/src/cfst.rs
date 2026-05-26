@@ -236,6 +236,7 @@ pub async fn run_cfst(
     let stdout_handle = tokio::spawn(async move {
         let mut buf = [0u8; 4096];
         let mut line_buf: Vec<u8> = Vec::new();
+        let mut progress_seen = false;
         loop {
             match stdout.read(&mut buf).await {
                 Ok(0) => break,
@@ -248,6 +249,13 @@ pub async fn run_cfst(
                                 if !trimmed.is_empty() {
                                     // Progress lines look like "0 / 5955 [___] 可用: 0"
                                     if trimmed.contains(" / ") && trimmed.contains("可用") {
+                                        if !progress_seen {
+                                            progress_seen = true;
+                                            let _ = app_handle_clone.emit("cfst:event", crate::models::RunEvent {
+                                                event_type: "log".into(),
+                                                message: "[系统] 进度检测已激活 (content-based)\n".into(),
+                                            });
+                                        }
                                         *latest_progress.lock().unwrap() = trimmed;
                                     } else {
                                         let _ = app_handle_clone.emit("cfst:event", crate::models::RunEvent {

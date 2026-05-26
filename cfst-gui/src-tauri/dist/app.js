@@ -228,7 +228,14 @@ function updateProgressLine(text) {
   var el = $('progressLine');
   if (!el) return;
   if (text) {
-    el.textContent = text;
+    // Extract only the last progress update from potentially concatenated text
+    // (cfst.exe uses \r to overwrite in terminal, but in a pipe they concatenate)
+    var matches = text.match(/\d+\s*\/\s*\d+\s*\[.*?\]\s*\S*:\s*\d+/g);
+    if (matches && matches.length > 0) {
+      el.textContent = matches[matches.length - 1];
+    } else {
+      el.textContent = text;
+    }
     el.style.display = '';
   } else {
     el.style.display = 'none';
