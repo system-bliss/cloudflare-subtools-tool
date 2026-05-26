@@ -279,7 +279,13 @@ pub async fn run_cfst(
     let _ = tokio::join!(stdout_handle, stderr_handle);
 
     // Get the child back and wait for it
-    let mut child = handle.lock().unwrap().take().unwrap();
+    let mut child = match handle.lock().unwrap().take() {
+        Some(c) => c,
+        None => {
+            // stop_cfst already killed the process and took the child
+            return Ok(Vec::new());
+        }
+    };
     let status = child
         .wait()
         .await

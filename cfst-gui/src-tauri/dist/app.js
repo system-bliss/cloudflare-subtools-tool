@@ -221,7 +221,7 @@ function appendLog(text) {
   if (/^\d+\s*\/\s*\d+\s*\[/.test(text)) {
     var content = log.textContent;
     var lastNL = content.lastIndexOf('\n');
-    log.textContent = (lastNL >= 0 ? content.substring(0, lastNL + 1) : '') + text.trimEnd();
+    log.textContent = (lastNL >= 0 ? content.substring(0, lastNL + 1) : '') + text;
   } else {
     log.textContent += text;
   }

@@ -157,13 +157,16 @@ async fn run_cfst(
 
     match &result {
         Ok(ips) => {
-            let _ = app_handle.emit(
-                "cfst:event",
-                RunEvent {
-                    event_type: "done".into(),
-                    message: format!("\nCFST completed. Found {} IPs.", ips.len()),
-                },
-            );
+            // Empty vec means user stopped — frontend already handles the UI
+            if !ips.is_empty() {
+                let _ = app_handle.emit(
+                    "cfst:event",
+                    RunEvent {
+                        event_type: "done".into(),
+                        message: format!("\nCFST completed. Found {} IPs.", ips.len()),
+                    },
+                );
+            }
         }
         Err(e) => {
             let _ = app_handle.emit(
