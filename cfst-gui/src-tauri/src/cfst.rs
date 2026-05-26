@@ -210,33 +210,15 @@ pub async fn run_cfst(
     let app_handle_clone = app_handle.clone();
 
     // Read stdout in background.
-    // cfst.exe outputs progress lines that update in-place via \r in terminals,
-    // but when stdout is piped the line-endings may be \r, \n, or \r\n.
-    // Strategy: treat both \r and \n as line separators. Classify each line
-    // by content — progress lines (contain " / " and "可用") go to the
-    // debounced progress bar, everything else goes to the log.
-    let latest_progress = Arc::new(Mutex::new(String::new()));
-    let progress_for_timer = latest_progress.clone();
-    let timer_app = app_handle.clone();
-
-    // Timer task: emit latest progress every 150ms
-    let progress_timer = tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-            let text = progress_for_timer.lock().unwrap().clone();
-            if !text.is_empty() {
-                let _ = timer_app.emit("cfst:event", crate::models::RunEvent {
-                    event_type: "progress".into(),
-                    message: text,
-                });
-            }
-        }
-    });
-
+    // cfst.exe uses \r for in-place terminal updates. In a pipe, both \r
+    // and \n appear as raw bytes. We treat both as line separators and emit
+    // everything as "log" events. The frontend detects progress-line patterns
+    // and replaces the last log line instead of appending — this is the only
+    // robust strategy because we can't know which line-ending convention a
+    // piped Go binary will use.
     let stdout_handle = tokio::spawn(async move {
         let mut buf = [0u8; 4096];
         let mut line_buf: Vec<u8> = Vec::new();
-        let mut progress_seen = false;
         loop {
             match stdout.read(&mut buf).await {
                 Ok(0) => break,
@@ -247,22 +229,10 @@ pub async fn run_cfst(
                                 let text = String::from_utf8_lossy(&line_buf).to_string();
                                 let trimmed = text.trim().to_string();
                                 if !trimmed.is_empty() {
-                                    // Progress lines look like "0 / 5955 [___] 可用: 0"
-                                    if trimmed.contains(" / ") && trimmed.contains("可用") {
-                                        if !progress_seen {
-                                            progress_seen = true;
-                                            let _ = app_handle_clone.emit("cfst:event", crate::models::RunEvent {
-                                                event_type: "log".into(),
-                                                message: "[系统] 进度检测已激活 (content-based)\n".into(),
-                                            });
-                                        }
-                                        *latest_progress.lock().unwrap() = trimmed;
-                                    } else {
-                                        let _ = app_handle_clone.emit("cfst:event", crate::models::RunEvent {
-                                            event_type: "log".into(),
-                                            message: trimmed + "\n",
-                                        });
-                                    }
+                                    let _ = app_handle_clone.emit("cfst:event", crate::models::RunEvent {
+                                        event_type: "log".into(),
+                                        message: trimmed + "\n",
+                                    });
                                 }
                                 line_buf.clear();
                             }
@@ -274,19 +244,15 @@ pub async fn run_cfst(
                 Err(_) => break,
             }
         }
-        // Emit any remaining text
+        // Flush remaining text
         if !line_buf.is_empty() {
             let text = String::from_utf8_lossy(&line_buf).to_string();
             let trimmed = text.trim().to_string();
             if !trimmed.is_empty() {
-                if trimmed.contains(" / ") && trimmed.contains("可用") {
-                    *latest_progress.lock().unwrap() = trimmed;
-                } else {
-                    let _ = app_handle_clone.emit("cfst:event", crate::models::RunEvent {
-                        event_type: "log".into(),
-                        message: trimmed + "\n",
-                    });
-                }
+                let _ = app_handle_clone.emit("cfst:event", crate::models::RunEvent {
+                    event_type: "log".into(),
+                    message: trimmed + "\n",
+                });
             }
         }
     });
@@ -311,13 +277,6 @@ pub async fn run_cfst(
     });
 
     let _ = tokio::join!(stdout_handle, stderr_handle);
-
-    // Stop the progress timer and clear the progress bar
-    progress_timer.abort();
-    let _ = app_handle.emit("cfst:event", crate::models::RunEvent {
-        event_type: "progress".into(),
-        message: String::new(),
-    });
 
     // Get the child back and wait for it
     let mut child = handle.lock().unwrap().take().unwrap();

@@ -87,16 +87,12 @@ async function init() {
       const unlisten = eventApi.listen('cfst:event', (event) => {
         const payload = event.payload;
         if (!payload) return;
-        if (payload.event_type === 'progress' || payload.type === 'progress') {
-          updateProgressLine(payload.message || '');
-        } else if (payload.event_type === 'log' || payload.type === 'log') {
+        if (payload.event_type === 'log' || payload.type === 'log') {
           appendLog(payload.message || '');
         } else if (payload.event_type === 'done' || payload.type === 'done') {
-          updateProgressLine('');
           appendLog(payload.message || '\nCFST completed.\n');
           setStatus('测速完成', '');
         } else if (payload.event_type === 'error' || payload.type === 'error') {
-          updateProgressLine('');
           appendLog('\n[ERROR] ' + payload.message + '\n');
           setStatus('测速出错', 'error');
         }
@@ -220,27 +216,16 @@ function appendLog(text) {
   if (!log) return;
   if (typeof text !== 'string') return;
 
-  log.textContent += text;
-  log.scrollTop = log.scrollHeight;
-}
-
-function updateProgressLine(text) {
-  var el = $('progressLine');
-  if (!el) return;
-  if (text) {
-    // Extract only the last progress update from potentially concatenated text
-    // (cfst.exe uses \r to overwrite in terminal, but in a pipe they concatenate)
-    var matches = text.match(/\d+\s*\/\s*\d+\s*\[.*?\]\s*\S*:\s*\d+/g);
-    if (matches && matches.length > 0) {
-      el.textContent = matches[matches.length - 1];
-    } else {
-      el.textContent = text;
-    }
-    el.style.display = '';
+  // Detect progress lines: "N / M [___] 可用: X" pattern
+  // Replace the last log line instead of appending a new one
+  if (/^\d+\s*\/\s*\d+\s*\[/.test(text)) {
+    var content = log.textContent;
+    var lastNL = content.lastIndexOf('\n');
+    log.textContent = (lastNL >= 0 ? content.substring(0, lastNL + 1) : '') + text.trimEnd();
   } else {
-    el.style.display = 'none';
-    el.textContent = '';
+    log.textContent += text;
   }
+  log.scrollTop = log.scrollHeight;
 }
 
 function clearLog() {
