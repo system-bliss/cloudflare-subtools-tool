@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicepkg/vscode-tauri/main/schemas/tauri.conf.schema.json",
+  "identifier": "default",
+  "description": "Default capability for CFST GUI",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "dialog:allow-open",
+    "dialog:allow-ask",
+    "dialog:allow-confirm"
+  ]
+}

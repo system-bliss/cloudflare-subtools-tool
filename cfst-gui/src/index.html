@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CFST GUI - CloudflareSpeedTest 优选工具</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <span class="logo">CFST GUI</span>
+    <span class="subtitle">CloudflareSpeedTest 优选 + Workers 订阅管理</span>
+    <span class="status" id="statusBar">HTML 已加载</span>
+  </header>
+
+  <div class="layout">
+    <!-- Left Panel -->
+    <aside class="sidebar">
+      <!-- Settings Section -->
+      <section class="panel">
+        <div class="panel-header" data-toggle="settingsPanel">
+          <span>服务设置</span>
+          <span class="toggle-icon">&#9660;</span>
+        </div>
+        <div class="panel-body" id="settingsPanel">
+          <label>服务器地址</label>
+          <input type="text" id="baseUrl" placeholder="https://your-worker-domain" spellcheck="false">
+
+          <label>API Token</label>
+          <div class="token-row">
+            <input type="password" id="apiToken" placeholder="输入 API Token">
+          </div>
+          <div class="token-row">
+            <input type="password" id="masterPwd" placeholder="主密码（加密存储）">
+            <button id="btnSaveToken" class="btn-sm">保存</button>
+            <button id="btnUnlockToken" class="btn-sm">解锁</button>
+          </div>
+          <div id="tokenStatus" class="hint"></div>
+
+          <label>cfst 程序路径</label>
+          <div class="path-row">
+            <input type="text" id="cfstPath" placeholder="选择 cfst 可执行文件" spellcheck="false">
+            <button id="btnBrowseCfst" class="btn-sm">浏览</button>
+          </div>
+
+          <label>输出目录</label>
+          <div class="path-row">
+            <input type="text" id="outputDir" placeholder="默认：cfst 同目录/output" spellcheck="false">
+            <button id="btnBrowseOutput" class="btn-sm">浏览</button>
+          </div>
+
+          <button id="btnSaveSettings" class="btn-primary" style="width:100%;margin-top:8px;">保存设置</button>
+        </div>
+      </section>
+
+      <!-- Preset Modes -->
+      <section class="panel">
+        <div class="panel-header" data-toggle="presetPanel">
+          <span>测速模式</span>
+          <span class="toggle-icon">&#9660;</span>
+        </div>
+        <div class="panel-body" id="presetPanel">
+          <div id="presetList"></div>
+          <div class="cfst-options">
+            <label>额外参数</label>
+            <input type="text" id="extraArgs" placeholder="自定义 cfst 参数" spellcheck="false">
+            <div class="opt-row">
+              <label>IP 地址族</label>
+              <select id="addressFamily">
+                <option value="Auto">自动</option>
+                <option value="IPv4">IPv4</option>
+                <option value="IPv6">IPv6</option>
+              </select>
+            </div>
+            <div class="opt-row">
+              <label>端口</label>
+              <input type="number" id="cfstPort" value="443" min="1" max="65535">
+              <label>Top N</label>
+              <input type="number" id="cfstTop" value="10" min="1" max="100">
+            </div>
+            <div class="opt-row">
+              <label>线程</label>
+              <input type="number" id="cfstThreads" value="100" min="1" max="1000">
+              <label>延迟上限(ms)</label>
+              <input type="number" id="cfstLatency" value="150" min="1" max="9999">
+            </div>
+            <div class="opt-row">
+              <label><input type="checkbox" id="cfstHttping" checked> HTTPing</label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Upload -->
+      <section class="panel">
+        <div class="panel-header" data-toggle="uploadPanel">
+          <span>上传到 Workers</span>
+          <span class="toggle-icon">&#9660;</span>
+        </div>
+        <div class="panel-body" id="uploadPanel">
+          <label>目标分组</label>
+          <select id="targetGroup">
+            <option value="">-- 请先获取分组 --</option>
+          </select>
+          <div style="margin-top:4px">
+            <button id="btnFetchGroups" class="btn-sm">刷新分组</button>
+            <button id="btnUpload" class="btn-primary btn-sm">上传选中 IP</button>
+          </div>
+          <label style="margin-top:6px"><input type="checkbox" id="autoUpload"> 测速完自动上传</label>
+          <div id="uploadStatus" class="hint"></div>
+        </div>
+      </section>
+
+      <!-- History -->
+      <section class="panel">
+        <div class="panel-header" data-toggle="historyPanel">
+          <span>上传历史</span>
+          <span class="toggle-icon">&#9660;</span>
+        </div>
+        <div class="panel-body scrollable" id="historyPanel">
+          <div id="historyList"><span class="muted">暂无记录</span></div>
+        </div>
+      </section>
+    </aside>
+
+    <!-- Main Area -->
+    <main class="main">
+      <!-- Command Preview -->
+      <section class="panel">
+        <div class="panel-header" data-toggle="cmdPanel">
+          <span>命令预览</span>
+          <span class="toggle-icon">&#9660;</span>
+        </div>
+        <div class="panel-body" id="cmdPanel">
+          <code id="cmdPreview" class="cmd-display">请先选择 cfst 程序路径并选择测速模式</code>
+        </div>
+      </section>
+
+      <!-- Actions -->
+      <div class="action-bar">
+        <button id="btnRun" class="btn-primary">&#9654; 开始测速</button>
+        <button id="btnStop" class="btn-danger" disabled>&#9632; 停止</button>
+        <button id="btnPreview" class="btn-sm">刷新命令</button>
+      </div>
+
+      <!-- Log Output -->
+      <section class="panel flex-grow">
+        <div class="panel-header">
+          <span>测速日志</span>
+          <button id="btnClearLog" class="btn-sm" style="margin-left:auto;">清空</button>
+        </div>
+        <div class="panel-body terminal" id="logOutput">
+          <span class="muted">等待执行测速任务...</span>
+        </div>
+      </section>
+
+      <!-- Results Table -->
+      <section class="panel">
+        <div class="panel-header">
+          <span>测速结果</span>
+          <span id="resultCount" class="muted"></span>
+          <div style="margin-left:auto;display:flex;gap:4px;">
+            <button id="btnSelectAll" class="btn-sm">全选</button>
+            <button id="btnSelectNone" class="btn-sm">清空</button>
+            <button id="btnSelectInvert" class="btn-sm">反选</button>
+          </div>
+        </div>
+        <div class="panel-body scrollable-table" id="resultsPanel">
+          <table id="resultsTable" class="results-table">
+            <thead>
+              <tr>
+                <th style="width:36px"><input type="checkbox" id="checkAll"></th>
+                <th>IP 地址</th>
+                <th>端口</th>
+                <th>延迟(ms)</th>
+                <th>下载速度</th>
+                <th>丢包率</th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody">
+              <tr><td colspan="6" class="muted">暂无结果，请运行测速</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // Inline diagnostic - runs before app.js
+    var logEl = document.getElementById('logOutput');
+    if (logEl) {
+      logEl.textContent = '[DIAG] Inline script running, DOM ready\n';
+      logEl.textContent += '[DIAG] navigator.userAgent: ' + navigator.userAgent.substring(0, 80) + '\n';
+      logEl.textContent += '[DIAG] window.__TAURI__: ' + (typeof window.__TAURI__ !== 'undefined') + '\n';
+      logEl.textContent += '[DIAG] window.__TAURI_INTERNALS__: ' + (typeof window.__TAURI_INTERNALS__ !== 'undefined') + '\n';
+      if (typeof window.__TAURI_INTERNALS__ !== 'undefined') {
+        var keys = Object.keys(window.__TAURI_INTERNALS__);
+        logEl.textContent += '[DIAG] __TAURI_INTERNALS__ keys: ' + keys.join(', ') + '\n';
+      }
+      if (typeof window.__TAURI__ !== 'undefined') {
+        logEl.textContent += '[DIAG] __TAURI__ keys: ' + Object.keys(window.__TAURI__).join(', ') + '\n';
+        if (window.__TAURI__.core) {
+          logEl.textContent += '[DIAG] __TAURI__.core keys: ' + Object.keys(window.__TAURI__.core).join(', ') + '\n';
+        }
+      }
+      logEl.textContent += '[DIAG] Inline script done, loading app.js...\n';
+    }
+    var statusEl = document.getElementById('statusBar');
+    if (statusEl) statusEl.textContent = '内联脚本已执行';
+  </script>
+  <script src="app.js" onerror="var s=document.getElementById('statusBar');if(s)s.textContent='app.js加载失败';var l=document.getElementById('logOutput');if(l)l.textContent+='[ERROR] app.js failed to load!\n';"></script>
+</body>
+</html>

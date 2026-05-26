@@ -1,0 +1,32 @@
+# Rust / Cargo
+target/
+.cargo/
+
+# Node / npm
+node_modules/
+package-lock.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.pdb
+*.dSYM/
+
+# Secrets / sensitive config
+settings.json
+*.env
+
+# Logs
+*.log
+
+# Tauri
+cfst-gui/src-tauri/icons/
+cfst-gui/src-tauri/target/
