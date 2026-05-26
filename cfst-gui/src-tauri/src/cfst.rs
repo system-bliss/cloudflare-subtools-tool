@@ -210,6 +210,27 @@ pub async fn run_cfst(
     let app_handle_clone = app_handle.clone();
 
     // Read stdout in background, handling \r for progress bars
+    // cfst.exe uses \r to update progress in-place in terminals; in a pipe
+    // these are just bytes, so we debounce: capture the latest \r-delimited
+    // segment and emit it periodically, while \n-delimited lines go to log.
+    let latest_progress = Arc::new(Mutex::new(String::new()));
+    let progress_for_timer = latest_progress.clone();
+    let timer_app = app_handle.clone();
+
+    // Timer task: emit latest progress every 100ms
+    let progress_timer = tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            let text = progress_for_timer.lock().unwrap().clone();
+            if !text.is_empty() {
+                let _ = timer_app.emit("cfst:event", crate::models::RunEvent {
+                    event_type: "progress".into(),
+                    message: text,
+                });
+            }
+        }
+    });
+
     let stdout_handle = tokio::spawn(async move {
         let mut buf = [0u8; 4096];
         let mut line_buf: Vec<u8> = Vec::new();
@@ -221,14 +242,10 @@ pub async fn run_cfst(
                         if byte == b'\r' {
                             if !line_buf.is_empty() {
                                 let text = String::from_utf8_lossy(&line_buf).to_string();
-                                let _ = app_handle_clone.emit("cfst:event", crate::models::RunEvent {
-                                    event_type: "progress".into(),
-                                    message: text,
-                                });
+                                *latest_progress.lock().unwrap() = text;
                                 line_buf.clear();
                             }
                         } else if byte == b'\n' {
-                            // Skip empty log when \n follows \r (Windows \r\n line endings)
                             if !line_buf.is_empty() {
                                 let text = String::from_utf8_lossy(&line_buf).to_string();
                                 let _ = app_handle_clone.emit("cfst:event", crate::models::RunEvent {
@@ -244,6 +261,12 @@ pub async fn run_cfst(
                 }
                 Err(_) => break,
             }
+        }
+        // Emit any final progress
+        let remaining = line_buf;
+        if !remaining.is_empty() {
+            let text = String::from_utf8_lossy(&remaining).to_string();
+            *latest_progress.lock().unwrap() = text;
         }
     });
 
@@ -267,6 +290,13 @@ pub async fn run_cfst(
     });
 
     let _ = tokio::join!(stdout_handle, stderr_handle);
+
+    // Stop the progress timer and clear the progress bar
+    progress_timer.abort();
+    let _ = app_handle.emit("cfst:event", crate::models::RunEvent {
+        event_type: "progress".into(),
+        message: String::new(),
+    });
 
     // Get the child back and wait for it
     let mut child = handle.lock().unwrap().take().unwrap();

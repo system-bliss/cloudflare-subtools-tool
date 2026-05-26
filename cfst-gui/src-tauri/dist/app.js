@@ -88,16 +88,14 @@ async function init() {
         const payload = event.payload;
         if (!payload) return;
         if (payload.event_type === 'progress' || payload.type === 'progress') {
-          updateProgressLineThrottled(payload.message || '');
+          updateProgressLine(payload.message || '');
         } else if (payload.event_type === 'log' || payload.type === 'log') {
           appendLog(payload.message || '');
         } else if (payload.event_type === 'done' || payload.type === 'done') {
-          if (_progressTimer) { clearTimeout(_progressTimer); _progressTimer = null; }
-          updateProgressLine(''); // clear progress line
+          updateProgressLine('');
           appendLog(payload.message || '\nCFST completed.\n');
           setStatus('测速完成', '');
         } else if (payload.event_type === 'error' || payload.type === 'error') {
-          if (_progressTimer) { clearTimeout(_progressTimer); _progressTimer = null; }
           updateProgressLine('');
           appendLog('\n[ERROR] ' + payload.message + '\n');
           setStatus('测速出错', 'error');
@@ -227,29 +225,15 @@ function appendLog(text) {
 }
 
 function updateProgressLine(text) {
-  var log = $('logOutput');
-  if (!log) return;
-  var content = log.textContent;
-  var lastNL = content.lastIndexOf('\n');
+  var el = $('progressLine');
+  if (!el) return;
   if (text) {
-    log.textContent = (lastNL >= 0 ? content.substring(0, lastNL + 1) : '') + text;
+    el.textContent = text;
+    el.style.display = '';
   } else {
-    // Empty text: remove the progress line, keep everything up to last \n
-    log.textContent = lastNL >= 0 ? content.substring(0, lastNL + 1) : '';
+    el.style.display = 'none';
+    el.textContent = '';
   }
-  log.scrollTop = log.scrollHeight;
-}
-
-var _progressPending = null;
-var _progressTimer = null;
-
-function updateProgressLineThrottled(text) {
-  _progressPending = text;
-  if (_progressTimer) return;
-  _progressTimer = setTimeout(function() {
-    _progressTimer = null;
-    updateProgressLine(_progressPending);
-  }, 80);
 }
 
 function clearLog() {

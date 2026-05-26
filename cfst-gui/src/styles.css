@@ -228,6 +228,19 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .terminal .muted { color: #888; font-style: normal; }
 
+.progress-line {
+  background: #16213e;
+  color: #ffd54f;
+  font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+  font-size: 12px;
+  padding: 4px 10px;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  border-top: 1px solid #333;
+}
+
 /* Command display */
 .cmd-display {
   display: block;
