@@ -166,6 +166,7 @@ pub struct CfstArgs {
     pub cli_args: Vec<String>,
     pub result_path: String,
     pub family: String,
+    pub top: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -182,6 +183,8 @@ pub struct RunEvent {
     #[serde(rename = "type")]
     pub event_type: String,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<Vec<CfstIp>>,
 }
 
 // ---- Workers API ----

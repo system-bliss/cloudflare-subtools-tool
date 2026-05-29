@@ -92,6 +92,10 @@ async function init() {
         } else if (payload.event_type === 'done' || payload.type === 'done') {
           appendLog(payload.message || '\nCFST completed.\n');
           setStatus('测速完成', '');
+          if (payload.data && Array.isArray(payload.data) && payload.data.length > 0) {
+            lastResults = payload.data;
+            renderResults(payload.data);
+          }
         } else if (payload.event_type === 'error' || payload.type === 'error') {
           appendLog('\n[ERROR] ' + payload.message + '\n');
           setStatus('测速出错', 'error');
@@ -450,15 +454,31 @@ function bindEvents() {
         ipFilePath: s.ip_file_path || '',
         ipv6FilePath: s.ipv6_file_path || '',
       });
+      appendLog('[DEBUG] run_cfst returned: ' + JSON.stringify(ips ? (Array.isArray(ips) ? 'array[' + ips.length + ']' : typeof ips) : 'null/undefined') + '\n');
       lastResults = ips;
       renderResults(ips);
       appendLog('\n测速完成，共 ' + (ips ? ips.length : 0) + ' 条结果\n');
 
       if (s.auto_upload && ips && ips.length > 0) {
         const groupId = $('targetGroup').value;
-        if (groupId) {
+        if (!groupId) {
+          appendLog('\n[WARN] 自动上传跳过：未选择目标分组，请先点击"刷新分组"并选择分组\n');
+          setStatus('自动上传跳过：未选择目标分组', 'error');
+        } else {
           appendLog('自动上传中...\n');
-          await doUpload(groupId, ips.map(ip => ip.ip));
+          // Check token status before attempting upload
+          try {
+            const ts = await safeInvoke('get_token_status');
+            if (!ts.is_unlocked) {
+              appendLog('[WARN] 自动上传失败：Token 未解锁，请先在 Token 设置中输入主密码并点击解锁\n');
+              setStatus('自动上传失败：Token 未解锁', 'error');
+            } else {
+              await doUpload(groupId, ips.map(ip => ip.ip));
+            }
+          } catch (e) {
+            appendLog('[WARN] 自动上传失败：无法检查 Token 状态 - ' + e + '\n');
+            setStatus('自动上传失败', 'error');
+          }
         }
       }
 
@@ -506,6 +526,13 @@ function bindEvents() {
   if (btnNone) btnNone.addEventListener('click', selectNone);
   const btnInv = $('btnSelectInvert');
   if (btnInv) btnInv.addEventListener('click', selectInvert);
+
+  // Persist selected group when dropdown changes
+  const targetGroup = $('targetGroup');
+  if (targetGroup) targetGroup.addEventListener('change', () => {
+    if (!settings) settings = {};
+    settings.selected_group_id = targetGroup.value;
+  });
 
   // Fetch groups
   const btnFetch = $('btnFetchGroups');

@@ -149,11 +149,29 @@ async fn run_cfst(
                 cfst_args.executable_path,
                 cfst_args.cli_args.join(" ")
             ),
+            data: None,
         },
     );
 
     let running = state.running_cfst.clone();
     let result = cfst::run_cfst(app_handle.clone(), cfst_args, running).await;
+
+    match &result {
+        Ok(ips) => {
+            let _ = app_handle.emit("cfst:event", RunEvent {
+                event_type: "log".into(),
+                message: format!("[DEBUG] lib::run_cfst got Ok({} IPs), returning to frontend\n", ips.len()),
+                data: None,
+            });
+        }
+        Err(e) => {
+            let _ = app_handle.emit("cfst:event", RunEvent {
+                event_type: "log".into(),
+                message: format!("[DEBUG] lib::run_cfst got Err({})\n", e),
+                data: None,
+            });
+        }
+    }
 
     match &result {
         Ok(ips) => {
@@ -164,6 +182,7 @@ async fn run_cfst(
                     RunEvent {
                         event_type: "done".into(),
                         message: format!("\nCFST completed. Found {} IPs.", ips.len()),
+                        data: Some(ips.clone()),
                     },
                 );
             }
@@ -174,6 +193,7 @@ async fn run_cfst(
                 RunEvent {
                     event_type: "error".into(),
                     message: e.clone(),
+                    data: None,
                 },
             );
         }

@@ -65,7 +65,7 @@ pub async fn upload_group_ips(
 
     let body = ips.join("\n");
     let url = format!(
-        "{}/api/groups/{}",
+        "{}/api/groups/{}/ips",
         normalize_base_url(base_url)?,
         group_id
     );
